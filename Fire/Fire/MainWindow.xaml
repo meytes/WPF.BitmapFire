@@ -1,0 +1,28 @@
+﻿<Window x:Class="Fire.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Fire"
+        mc:Ignorable="d"
+        Title="Fire (WriteableBitmap demo)" Width="640" Height="480"
+        ResizeMode="NoResize">
+    <Window.Triggers>
+        <EventTrigger RoutedEvent="Loaded">
+            <EventTrigger.Actions>
+                <BeginStoryboard>
+                    <Storyboard >
+                        <Int32Animation Duration="0:0:1" RepeatBehavior="Forever" From="0" To="15"
+                                        Storyboard.TargetName="Fire"
+                                        Storyboard.TargetProperty="Offset"/>
+
+
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger.Actions>
+        </EventTrigger>
+    </Window.Triggers>
+    <Grid>
+        <local:FireBitmap x:Name="Fire" SnapsToDevicePixels="True" Stretch="Fill" />
+    </Grid>
+</Window>
