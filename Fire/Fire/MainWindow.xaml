@@ -12,7 +12,7 @@
             <EventTrigger.Actions>
                 <BeginStoryboard>
                     <Storyboard >
-                        <Int32Animation Duration="0:0:1" RepeatBehavior="Forever" From="0" To="15"
+                        <Int32Animation Duration="0:0:1" RepeatBehavior="Forever" From="0" To="60"
                                         Storyboard.TargetName="Fire"
                                         Storyboard.TargetProperty="Offset"/>
 
@@ -24,5 +24,6 @@
     </Window.Triggers>
     <Grid>
         <local:FireBitmap x:Name="Fire" SnapsToDevicePixels="True" Stretch="Fill" />
+        <TextBlock Text="{Binding FPS,ElementName=Fire,StringFormat=###.00}" HorizontalAlignment="Right" VerticalAlignment="Top" Foreground="White"/>
     </Grid>
 </Window>

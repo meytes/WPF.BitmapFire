@@ -1,4 +1,9 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -9,7 +14,19 @@ namespace Fire
 {
     public class FireBitmap : Image
     {
-        private const int RenderWidth = 250, RenderHeight = 65;
+        // Если false - то рендеринг однопоточный, если true - многопоточный
+        private const bool IsParallel = false;
+        public double FPS
+        {
+            get { return (double)GetValue(FPSProperty); }
+            set { SetValue(FPSProperty, value); }
+        }
+
+        public static readonly DependencyProperty FPSProperty =
+            DependencyProperty.Register("FPS", typeof(double), typeof(FireBitmap), new PropertyMetadata(0.0));
+
+
+        private const int RenderWidth = 500, RenderHeight = 250;
 
         private static readonly uint[] _colors = new uint[] { 0x000000, 0x070707, 0x1F0707, 0x2F0F07, 0x470F07, 0x571707, 0x671F07, 0x771F07,
                 0x8F2707, 0x9F2F07, 0xAF3F07, 0xBF4707, 0xBF4707, 0xC74707, 0xDF4F07, 0xDF4F07,0xC74707, 0xC74707, 0xDF5707, 0xDF5707, 0xD75F07,
@@ -31,11 +48,14 @@ namespace Fire
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         };
 
+        //Битмап
         private readonly WriteableBitmap _writer;
-        private readonly Random _rnd = new Random();
+        private int _backBuffer;
+        private int _backBufferStride;
+        private readonly int PixelWidth;
+        private readonly int PixelHeight;
 
-
-
+        //Обработчик события изменения DP, анимация меняет значение, а этот метод запускает перерисовку
         private static void OnPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is FireBitmap fire) fire.DoFire();
@@ -44,6 +64,9 @@ namespace Fire
         public FireBitmap() : base()
         {
             _writer = GetBitmap();
+            PixelWidth = _writer.PixelWidth;
+            PixelHeight = _writer.PixelHeight;
+
             InitFireBase(_writer);
             Source = _writer;
             PreviewMouseMove += FireBitmap_PreviewMouseMove1;
@@ -62,8 +85,10 @@ namespace Fire
 
         private WriteableBitmap GetBitmap()
         {
-            var bitMapPalette = new BitmapPalette(GetColors(_colors));
-            var writer = new WriteableBitmap(RenderWidth, RenderHeight, 96.0, 96.0, PixelFormats.Indexed8, bitMapPalette);
+            //Создаем палитру
+            BitmapPalette bitMapPalette = new BitmapPalette(GetColors(_colors));
+            //Создаем растровую картинку (bitmap)
+            WriteableBitmap writer = new WriteableBitmap(RenderWidth, RenderHeight, 96.0, 96.0, PixelFormats.Indexed8, bitMapPalette);
             return writer;
         }
 
@@ -77,7 +102,6 @@ namespace Fire
                 DrawSmart(startX, startY);
             }
         }
-
         private void DrawSmart(int startX, int startY)
         {
             var writer = _writer;
@@ -92,7 +116,6 @@ namespace Fire
             }
 
         }
-
         private void FireBitmap_PreviewMouseMove1(object sender, MouseEventArgs e)
         {
             if (e.LeftButton == MouseButtonState.Pressed)
@@ -103,7 +126,6 @@ namespace Fire
                 DrawPoint(startX, startY);
             }
         }
-
         private void DrawPoint(int startX, int startY)
         {
             var writer = _writer;
@@ -117,7 +139,7 @@ namespace Fire
                 {
                     for (int y = startY; y < startY + 2; y++)
                     {
-                        SetPixel(writer, x, y, initColorIndex);
+                        SetPixel(x, y, initColorIndex);
                     }
                 }
                 writer.AddDirtyRect(new Int32Rect(startX, startY, 4, 4));
@@ -125,6 +147,7 @@ namespace Fire
             }
         }
 
+        //Возвращает список цветов палитры 
         private static Color[] GetColors(uint[] colors)
         {
             var result = new Color[colors.Length];
@@ -136,65 +159,113 @@ namespace Fire
             return result;
         }
 
-        private unsafe byte GetPixel(WriteableBitmap writer, int x, int y)
+        //Возвращает значение цвета пикселя
+        private unsafe byte GetPixel(int x, int y)
         {
-            int pixelPointer = (int)writer.BackBuffer + y * writer.BackBufferStride + x;
+            int pixelPointer = _backBuffer + y * _backBufferStride + x;
             return *(byte*)pixelPointer;
         }
 
-        private unsafe void SetPixel(WriteableBitmap writer, int x, int y, byte color)
+        //Задает значение цвета пикселя
+        private unsafe void SetPixel(int x, int y, byte color)
         {
-            int pixelPointer = (int)writer.BackBuffer + y * writer.BackBufferStride + x;
+            int pixelPointer = (int)_backBuffer + y * _backBufferStride + x;
             *(byte*)pixelPointer = color;
         }
 
+        //Инициализирует картинку (рисует полосу)
         private void InitFireBase(WriteableBitmap writer)
         {
             writer.Lock();
+
+            _backBuffer = (int)_writer.BackBuffer;
+            _backBufferStride = (int)_writer.BackBufferStride;
+
             byte initColorIndex = (byte)(writer.Palette.Colors.Count - 1);
-            for (int x = 0; x < writer.PixelWidth; x++)
+            for (int x = 0; x < PixelWidth; x++)
             {
-                SetPixel(writer, x, writer.PixelHeight - 1, initColorIndex);
+                SetPixel(x, PixelHeight - 1, initColorIndex);
             }
-            writer.AddDirtyRect(new Int32Rect(0, writer.PixelHeight - 1, writer.PixelWidth, 1));
+            writer.AddDirtyRect(new Int32Rect(0, PixelHeight - 1, PixelWidth, 1));
             writer.Unlock();
         }
 
+        //Рендерит новый кадр
         private void DoFire()
         {
+            var watch = new Stopwatch();
+            watch.Start();
+
             var writer = _writer;
             writer.Lock();
-            for (int x = 1; x < writer.PixelWidth - 1; x++)
+
+            _backBuffer = (int)_writer.BackBuffer;
+            _backBufferStride = (int)_writer.BackBufferStride;
+
+            //Разбиваем Ось X на 8 частей
+            IEnumerable<Range> steps = Range.Create(1, PixelWidth - 1).Split(8);
+
+            Parallel.ForEach(steps, new ParallelOptions() { MaxDegreeOfParallelism = 8 }, range =>
             {
-                for (int y = 0; y < writer.PixelHeight - 1; y++)
+                for (int x = range.Start; x < range.End; x++)
                 {
-                    SpreadFire(writer, x, y);
-                }
-            }
-            writer.AddDirtyRect(new Int32Rect(0, 0, writer.PixelWidth, writer.PixelHeight));
-            writer.Unlock();
-
-        }
-
-        private void SpreadFire(WriteableBitmap writer, int x, int y)
-        {
-            byte topPixel = GetPixel(writer, x, y + 1);
-            byte rand = (byte)_rnd.Next(0, 4);
-            if (topPixel >= rand)
-            {
-                int xoffset =  _rnd.Next(0, 3) - 1;
-                byte newColor = (byte)(topPixel - rand);
-                SetPixel(writer, x + xoffset, y, newColor);
-
-                if (rand < 2)
-                {
-                    if (y + 1 < writer.PixelHeight - 1)
+                    for (int y = 0; y < PixelHeight - 1; y++)
                     {
-                        var decrColor = (byte)(topPixel - 1);
-                        SetPixel(writer, x, y + 1, decrColor);
+                        SpreadFire(x, y);
                     }
                 }
+            });
+            writer.AddDirtyRect(new Int32Rect(0, 0, PixelWidth, PixelHeight));
+            writer.Unlock();
+            watch.Stop();
+            FPS = (FPS + 1000.0d / watch.ElapsedMilliseconds) / 2.0;
+
+
+        }
+
+        
+        //Так как тип Random не потокобезопасный, для каждого потока создается свой Random
+        private static readonly ThreadLocal<Random> _random = new ThreadLocal<Random>(() => new Random());
+        private byte RndNext(int start, int end)
+        {
+            return (byte)_random.Value.Next(start, end);
+        }
+
+        //Вычисляет значение точки для нового кадра
+        private void SpreadFire(int x, int y)
+        {
+            byte topPixel = GetPixel(x, y + 1);
+            byte rand = RndNext(0, 4);
+            if (topPixel >= rand)
+            {
+                int xoffset = RndNext(0, 3) - 1;
+                byte newColor = (byte)(topPixel - rand);
+                if (newColor < 0) newColor = 0;
+                SetPixel(x + xoffset, y, newColor);
             }
         }
+
+
+
+        private struct Range
+        {
+            public static Range Create(int start, int end) => new Range(start, end);
+            private Range(int start, int end) { Start = start; End = end; }
+            public int Start;
+            public int End;
+            public IEnumerable<Range> Split(int count) => Split(Start, End, count);
+            //Разделяет отрезок на заданное количество отрезков
+            private static IEnumerable<Range> Split(int start, int end, int count)
+            {
+                int step = ((end - start) / count) + 1;
+                for (int i = 0; i < count; i++)
+                {
+                    int begin = start + (i * step);
+                    int finish = Math.Min(end, (begin + step) - 1);
+                    yield return new Range(begin, finish);
+                }
+            }
+        }
+
     }
 }
