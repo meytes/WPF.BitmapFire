@@ -218,7 +218,7 @@ namespace Fire
             writer.AddDirtyRect(new Int32Rect(0, 0, PixelWidth, PixelHeight));
             writer.Unlock();
             watch.Stop();
-            FPS = (FPS + 1000.0d / watch.ElapsedMilliseconds) / 2.0;
+            FPS = 1000.0d / watch.ElapsedMilliseconds;
 
 
         }
